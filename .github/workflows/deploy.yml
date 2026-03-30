@@ -1,0 +1,90 @@
+name: Deploy Frontend (Dev - dev.smartlearners.ai)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: build
+          path: frontend/dist/
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: build
+          path: build_folder
+
+      - name: Upload build to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MYNELO_SERVER_HOST }}
+          username: ${{ secrets.MYNELO_SERVER_USER }}
+          password: ${{ secrets.MYNELO_SERVER_PASS }}
+          port: ${{ secrets.MYNELO_SERVER_PORT }}
+          source: "build_folder/*"
+          target: "/var/www/mynelo/new_build_tmp"
+          strip_components: 1
+
+      - name: Swap build folder and reload NGINX
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.MYNELO_SERVER_HOST }}
+          username: ${{ secrets.MYNELO_SERVER_USER }}
+          password: ${{ secrets.MYNELO_SERVER_PASS }}
+          port: ${{ secrets.MYNELO_SERVER_PORT }}
+          script: |
+            cd /var/www/mynelo
+
+            # Detect last build number
+            LAST_BUILD=$(ls -d build* 2>/dev/null | sed 's/build//' | sort -n | tail -1)
+
+            if [ -z "$LAST_BUILD" ]; then
+                NEXT_BUILD=1
+            else
+                NEXT_BUILD=$((LAST_BUILD + 1))
+            fi
+
+            NEW_FOLDER="build$NEXT_BUILD"
+            echo "Creating new folder: $NEW_FOLDER"
+
+            # Move uploaded build into versioned folder
+            mv new_build_tmp "$NEW_FOLDER"
+
+            # Update NGINX root to point at new build
+            sudo sed -i "s|root /var/www/mynelo/.*;|root /var/www/mynelo/$NEW_FOLDER;|" /etc/nginx/sites-enabled/mynelo
+
+            sudo systemctl reload nginx
+            echo "Deployment complete → Using $NEW_FOLDER"
