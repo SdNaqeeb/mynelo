@@ -21,6 +21,7 @@ import {
   Users,
   User,
   Lightbulb,
+  ClipboardList,
 } from "lucide-react";
 
 const ExamCorrection = () => {
@@ -178,7 +179,7 @@ const ExamCorrection = () => {
   };
 
   const isExamNameDuplicate =
-    correctionMode === "new" &&
+    (correctionMode === "new" || correctionMode === "admission") &&
     examName.trim() !== "" &&
     existingExamNames.includes(examName.trim().toLowerCase());
 
@@ -277,7 +278,7 @@ const ExamCorrection = () => {
       setError("Please enter class name");
       return;
     }
-    if (correctionMode === "new" && !questionPaper) {
+    if ((correctionMode === "new" || correctionMode === "admission") && !questionPaper) {
       setError("Please upload question paper");
       return;
     }
@@ -295,7 +296,13 @@ const ExamCorrection = () => {
 
       const formData = new FormData();
       formData.append("exam_name", examName.trim());
-      formData.append("exam_type", examType);
+      formData.append(
+        "exam_type",
+        correctionMode === "admission" ? "Admission" : examType,
+      );
+      if (correctionMode === "admission") {
+        formData.append("admission_test", "true");
+      }
       formData.append("teacher_name", teacherName);
       formData.append("class_name", className.trim());
       formData.append("section", section.trim());
@@ -336,7 +343,9 @@ const ExamCorrection = () => {
       setAlertMsg(
         correctionMode === "existing"
           ? "Additional students uploaded successfully! Processing in background..."
-          : "Exam uploaded successfully! Processing in background...",
+          : correctionMode === "admission"
+            ? "Admission exam uploaded successfully! Processing in background..."
+            : "Exam uploaded successfully! Processing in background...",
       );
 
       if (correctionMode === "existing") {
@@ -490,6 +499,31 @@ const ExamCorrection = () => {
             </button>
           </div>
 
+          {/* ADMISSION EXAM CARD */}
+          <div className="mb-6">
+            <button
+              className="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#00A0E3] hover:shadow-md transition-all group flex items-center gap-5"
+              onClick={() => {
+                setUploadMode("individual");
+                setCorrectionMode("admission");
+              }}
+            >
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-[#00A0E3]/10 transition-colors">
+                <ClipboardList className="w-6 h-6 text-[#00A0E3]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold text-[#0B1120]">Admission Exam</h2>
+                <p className="text-sm text-gray-500">
+                  Upload and grade admission test papers — individual students only
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[#00A0E3] font-medium text-sm flex-shrink-0">
+                Select
+                <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+              </span>
+            </button>
+          </div>
+
           {/* Info Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="flex items-center gap-2 text-base font-bold text-[#0B1120] mb-4">
@@ -637,6 +671,7 @@ const ExamCorrection = () => {
                 handleBackToModeSelection();
               }
             }}
+
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -648,12 +683,16 @@ const ExamCorrection = () => {
             <h1 className="text-xl font-bold text-[#0B1120]">
               {correctionMode === "existing"
                 ? `Add Students to: ${examName}`
-                : "New Exam Correction"}
+                : correctionMode === "admission"
+                  ? "Admission Exam"
+                  : "New Exam Correction"}
             </h1>
             <p className="text-sm text-gray-500">
               {correctionMode === "existing"
                 ? "Upload additional answer sheets for this exam"
-                : "Upload question papers and answer sheets for automated grading"}
+                : correctionMode === "admission"
+                  ? "Upload question papers and admission answer sheets for grading"
+                  : "Upload question papers and answer sheets for automated grading"}
             </p>
           </div>
         </div>
@@ -687,7 +726,9 @@ const ExamCorrection = () => {
               <span>
                 {correctionMode === "existing"
                   ? "Additional students uploaded successfully!"
-                  : "Exam submitted successfully!"}{" "}
+                  : correctionMode === "admission"
+                    ? "Admission exam submitted successfully!"
+                    : "Exam submitted successfully!"}{" "}
                 Processing in background...
               </span>
             </div>
@@ -704,8 +745,8 @@ const ExamCorrection = () => {
             </div>
           )}
 
-          {/* Upload Mode Selection */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          {/* Upload Mode Selection — hidden for admission */}
+          {correctionMode !== "admission" && <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#0B1120] mb-4">
               <Upload className="w-4 h-4 text-[#00A0E3]" />
               Upload Mode
@@ -767,7 +808,7 @@ const ExamCorrection = () => {
                 </div>
               </label>
             </div>
-          </div>
+          </div>}
 
           {/* Exam Details Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -797,6 +838,7 @@ const ExamCorrection = () => {
                 )}
               </div>
 
+              {correctionMode !== "admission" && (
               <div>
                 <label htmlFor="examType" className="block text-sm font-medium text-[#0B1120] mb-1.5">
                   Exam Type <span className="text-[#ef4444]">*</span>
@@ -811,6 +853,7 @@ const ExamCorrection = () => {
                   disabled={loading || correctionMode === "existing" || isExamNameDuplicate}
                 />
               </div>
+              )}
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
@@ -1119,7 +1162,11 @@ const ExamCorrection = () => {
               ) : (
                 <>
                   <Rocket className="w-4 h-4" />
-                  {correctionMode === "existing" ? "Add Students" : "Start Correction"}
+                  {correctionMode === "existing"
+                    ? "Add Students"
+                    : correctionMode === "admission"
+                      ? "Submit Admission Exam"
+                      : "Start Correction"}
                 </>
               )}
             </button>
