@@ -72,6 +72,11 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
   const [isLoadingHomeworkList, setIsLoadingHomeworkList] = useState(false);
   const [homeworkListError, setHomeworkListError] = useState(null);
 
+  // State for section selection (required for homework/classwork submission)
+  const [sections, setSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState("");
+  const [loadingSections, setLoadingSections] = useState(false);
+
   // Fetch classes on component mount
   useEffect(() => {
     async function fetchData() {
@@ -85,6 +90,35 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
     }
     fetchData();
   }, []);
+
+  // Fetch sections when class is selected
+  useEffect(() => {
+    async function fetchSections() {
+      if (!selectedClass) {
+        setSections([]);
+        setSelectedSection("");
+        return;
+      }
+      try {
+        setLoadingSections(true);
+        const selectedClassObj = classes.find(c => c.class_code === selectedClass || c.id === selectedClass);
+        const className = selectedClassObj?.class_name || selectedClassObj?.name || selectedClass;
+        const formData = new FormData();
+        formData.append('class_name', className);
+        const response = await axiosInstance.post('/api/teacher-sections/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setSections(response.data.sections || []);
+        setSelectedSection("");
+      } catch (error) {
+        console.error("Error fetching sections:", error);
+        setSections([]);
+      } finally {
+        setLoadingSections(false);
+      }
+    }
+    fetchSections();
+  }, [selectedClass, classes]);
 
   // Fetch subjects when class is selected
   useEffect(() => {
@@ -453,6 +487,12 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
       return;
     }
 
+    if (!selectedSection) {
+      setError("Please select a section before submitting");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // Create the questions text for the description
       const questionsText = selectedQuestions.map((q, idx) =>
@@ -470,8 +510,8 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
         title: homeworkTitle.trim(),
         description: selectedQuestions,
         imageUrl: selectedQuestions.length > 0 && selectedQuestions[0].image ? selectedQuestions[0].image : null,
-        teacherId: selectedClass, // Using selectedClass as teacherId
-        classId: selectedClass,
+        section_id: parseInt(selectedSection),
+        subject_id: selectedSubject,
         due_date: new Date(dueDate).toISOString(),
         date_assigned: new Date().toISOString(),
         questions: selectedQuestions,
@@ -550,6 +590,12 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
     setClassworkError(null);
     setIsClassworkSubmitting(true);
 
+    if (!selectedSection) {
+      setClassworkError("Please select a section before submitting.");
+      setIsClassworkSubmitting(false);
+      return;
+    }
+
     if (!classworkTitle.trim() || !classworkCode.trim() || !classworkDueDate || !classworkPDFs || classworkPDFs.length === 0) {
       setClassworkError("Please fill in all required fields.");
       setIsClassworkSubmitting(false);
@@ -580,6 +626,8 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
       formData.append('class_work_code', classworkCode.trim());
       formData.append('worksheet_name', classworkTitle.trim());
       formData.append('due-time', classworkDueDate.trim());
+      formData.append('section_id', parseInt(selectedSection));
+      formData.append('subject_id', selectedSubject);
 
       // Append questions data
       formData.append('questions', JSON.stringify(selectedQuestions));
@@ -618,6 +666,27 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
 
         <form onSubmit={handleHomeworkSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[#0B1120] mb-1">Section <span className="text-red-500">*</span></label>
+              <select
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+                required
+                disabled={loadingSections || sections.length === 0}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#00A0E3] focus:outline-none"
+              >
+                <option value="">
+                  {loadingSections ? 'Loading...' : sections.length === 0 ? 'Select class first' : 'Select Section'}
+                </option>
+                {sections.map((sec, index) => (
+                  <option key={sec.section_id || index} value={sec.section_id}>
+                    {sec.section_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[#0B1120] mb-1">Homework Code</label>
@@ -714,6 +783,27 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
       <h3 className="text-lg font-bold text-[#0B1120] mb-4">Create Classwork PDF & Submit Questions</h3>
       {classworkError && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{classworkError}</div>}
       <form onSubmit={handleClassworkSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-[#0B1120] mb-1">Section <span className="text-red-500">*</span></label>
+            <select
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              required
+              disabled={loadingSections || sections.length === 0}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#00A0E3] focus:outline-none"
+            >
+              <option value="">
+                {loadingSections ? 'Loading...' : sections.length === 0 ? 'Select class first' : 'Select Section'}
+              </option>
+              {sections.map((sec, index) => (
+                <option key={sec.section_id || index} value={sec.section_id}>
+                  {sec.section_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[#0B1120] mb-1">Classwork Code</label>
@@ -1374,7 +1464,7 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
       <h3 className="text-lg font-bold text-[#0B1120] mb-1">{title}</h3>
       <p className="text-sm text-gray-500 mb-4">{description}</p>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-[#0B1120] mb-1">Class</label>
             <select
@@ -1386,6 +1476,24 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
               {classes.map((cls) => (
                 <option key={cls.class_code} value={cls.class_code}>
                   {cls.class_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#0B1120] mb-1">Section <span className="text-red-500">*</span></label>
+            <select
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              disabled={loadingSections || sections.length === 0}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#00A0E3] focus:outline-none disabled:opacity-50 disabled:bg-gray-50"
+            >
+              <option value="">
+                {loadingSections ? 'Loading...' : sections.length === 0 ? 'Select class first' : 'Select Section'}
+              </option>
+              {sections.map((sec, index) => (
+                <option key={sec.section_id || index} value={sec.section_id}>
+                  {sec.section_name}
                 </option>
               ))}
             </select>
@@ -1562,6 +1670,7 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
             questionList={questionList}
             isMultipleSelect={true}
             onMultipleSelectSubmit={handleMultipleSelectSubmit}
+            submitLabel="Continue with Selected Questions"
           />
         )}
 
@@ -1572,6 +1681,7 @@ const QuickExerciseComponent = ({ onCreateHomework, mode = "homework" }) => {
             onHide={() => setShowQuestionList(false)}
             questionList={questionList}
             isMultipleSelect={true}
+            submitLabel="Continue with Selected Questions"
             onMultipleSelectSubmit={(selectedQuestionsData) => {
               setSelectedQuestions(selectedQuestionsData);
               setShowQuestionList(false);

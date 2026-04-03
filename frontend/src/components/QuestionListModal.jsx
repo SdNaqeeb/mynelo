@@ -118,6 +118,7 @@ const QuestionListModal = ({
   paginationInfo = null,
   onNextPage = null,
   onPrevPage = null,
+  submitLabel = null,
 }) => {
   const navigate = useNavigate();
   const { showAlert, AlertContainer } = useAlert();
@@ -603,7 +604,9 @@ const QuestionListModal = ({
                     disabled={selectedQuestions.length === 0}
                     className="flex items-center gap-2 px-4 py-2 bg-[#00A0E3] hover:bg-[#0080B8] text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Attempt Selected Questions ({selectedQuestions.length}/20)
+                    {submitLabel
+                      ? `${submitLabel} (${selectedQuestions.length})`
+                      : `Attempt Selected Questions (${selectedQuestions.length}/20)`}
                   </button>
                 )}
                 <button

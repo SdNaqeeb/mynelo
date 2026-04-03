@@ -6,7 +6,7 @@ import autoTable from "jspdf-autotable";
 import axiosInstance from "../api/axiosInstance";
 import "./QuizResult.css";
 import MarkdownWithMath from "./MarkdownWithMath";
-import QuizResultChatPanel from "./QuizResultChatPanel";
+// import QuizResultChatPanel from "./QuizResultChatPanel";
 import {
   generateQuestions,
   generateLearningPath,
@@ -2791,8 +2791,8 @@ const QuizResult = () => {
         </AnimatePresence>,
         document.body,
       )}
-      // AFTER (both Board AND JEE)
-      <QuizResultChatPanel
+      
+      {/* <QuizResultChatPanel
         evalData={evalData}
         questions={questions}
         answers={answers}
@@ -2800,7 +2800,7 @@ const QuizResult = () => {
         subject={subject}
         timeSpent={timeSpent}
         onRetake={handleRetakeTest}
-      />
+      /> */}
     </div>
   );
 };

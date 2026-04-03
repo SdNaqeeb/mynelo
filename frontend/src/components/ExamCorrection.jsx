@@ -32,6 +32,8 @@ const ExamCorrection = () => {
   const [correctionMode, setCorrectionMode] = useState(null);
 
   const HARDCODED_SUBJECTS = ["MATHEMATICS", "SCIENCE", "PHYSICS", "CHEMISTRY", "ENGLISH"];
+  const ADMISSION_SUBJECTS = ["MATHEMATICS", "SCIENCE", "ENGLISH", "EVS"];
+  const availableSubjects = examType.toLowerCase().includes("admission") ? ADMISSION_SUBJECTS : HARDCODED_SUBJECTS;
 
   // STEP 2A: For existing correction - exam selection
   const [existingExams, setExistingExams] = useState([]);
@@ -849,7 +851,7 @@ const ExamCorrection = () => {
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00A0E3]/20 focus:border-[#00A0E3] disabled:bg-gray-50 disabled:text-gray-400"
                   placeholder="e.g., Midterm, Final, Unit Test"
                   value={examType}
-                  onChange={(e) => setExamType(e.target.value)}
+                  onChange={(e) => { setExamType(e.target.value); setSubject(""); }}
                   disabled={loading || correctionMode === "existing" || isExamNameDuplicate}
                 />
               </div>
@@ -932,7 +934,7 @@ const ExamCorrection = () => {
                       disabled={loading || correctionMode === "existing"}
                     >
                       <option value="">Select Subject</option>
-                      {HARDCODED_SUBJECTS.map((sub) => (
+                      {availableSubjects.map((sub) => (
                         <option key={sub} value={sub}>
                           {sub}
                         </option>

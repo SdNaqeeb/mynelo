@@ -506,7 +506,7 @@ const Layout = ({ children }) => {
         isOpen={showFeedback}
         onClose={() => setShowFeedback(false)}
       />
-      {role === "student" && !trialDismissed && window.location.hostname !== 'mynelo.in' && window.location.hostname !== 'www.mynelo.in' && <TrialModal />}
+      {/* {role === "student" && !trialDismissed && window.location.hostname !== 'mynelo.in' && window.location.hostname !== 'www.mynelo.in' && <TrialModal />} */}
 
       {/* Edit Profile Modal */}
       {showEditProfile && (

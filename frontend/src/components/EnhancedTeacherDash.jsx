@@ -303,7 +303,7 @@ const fetchTeacherData = async () => {
 
   const handleAssignmentSubmit = async (assignment, mode) => {
     try {
-      const endpoint = mode === "classwork" ? "/classwork/" : "/homework/";
+      const endpoint = mode === "classwork" ? "/classwork/" : "api/add-homework/";
       const response = await axiosInstance.post(endpoint, assignment);
 
       if (response.status === 201) {

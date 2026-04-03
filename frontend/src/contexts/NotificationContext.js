@@ -96,9 +96,9 @@ export const NotificationProvider = ({ children }) => {
 
             const newNotification = {
               id: uniqueId,
+              _serverId: msg.notification_id || msg.id || msg.class_work_id || msg.homework_id || msg.submission_id || null,
               title: msg.title || "Action Acknowledged",
               message: sanitizeNotificationMessage(
-                // ✅ CHANGED
                 msg.message,
                 "Homework successfully dispatched to class.",
               ),
@@ -115,9 +115,9 @@ export const NotificationProvider = ({ children }) => {
           else if (msg.type === "classwork_completion_notification") {
             const newNotification = {
               id: msg.submission_id ?? Date.now().toString(),
+              _serverId: msg.notification_id || msg.id || null,
               title: "Classwork Completed",
               message: sanitizeNotificationMessage(
-                // ✅ CHANGED
                 msg.message,
                 "Your classwork has been processed.",
               ),
@@ -139,9 +139,9 @@ export const NotificationProvider = ({ children }) => {
           else if (msg.type === "homework_completion_notification") {
             const newNotification = {
               id: msg.submission_id ?? Date.now().toString(),
+              _serverId: msg.notification_id || msg.id || null,
               title: "Homework Completed",
               message: sanitizeNotificationMessage(
-                // ✅ CHANGED
                 msg.message,
                 "Your homework has been processed.",
               ),
@@ -200,16 +200,21 @@ export const NotificationProvider = ({ children }) => {
       )
     );
 
+    // Use the real server-side notification ID if present (teacher notifications
+    // use a synthetic local ID for deduplication but need the actual DB ID for the API)
+    const notif = notifications.find((n) => n.id === id);
+    const serverId = notif?._serverId ?? id;
+
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(
-          JSON.stringify({ action: "mark_read", notification_id: id })
+          JSON.stringify({ action: "mark_read", notification_id: serverId })
         );
       }
     } catch (_) {}
 
     try {
-      await axiosInstance.post(`/notifications/${id}/read/`);
+      await axiosInstance.post(`/notifications/${serverId}/read/`);
     } catch (error) {
       console.warn("⚠ Could not mark as read on server", error);
       setNotifications((prev) =>

@@ -247,6 +247,17 @@ const ChatBox = forwardRef((props, ref) => {
 
   // Remedial duration dropdown state
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
+
+  // Student Analysis panel state (teacher only)
+  const [showStudentAnalysisPanel, setShowStudentAnalysisPanel] = useState(false);
+  const [saClasses, setSaClasses] = useState([]);
+  const [saExams, setSaExams] = useState([]);
+  const [saStudents, setSaStudents] = useState([]);
+  const [saSelectedClass, setSaSelectedClass] = useState("");
+  const [saSelectedStudent, setSaSelectedStudent] = useState("");
+  const [saSelectedExam, setSaSelectedExam] = useState("");
+  const [saLoadingClasses, setSaLoadingClasses] = useState(false);
+  const [saLoadingData, setSaLoadingData] = useState(false);
   const durationOptions = [
     { label: "1 Hour", value: "1 hour" },
     { label: "2 Hours", value: "2 hours" },
@@ -334,6 +345,13 @@ const ChatBox = forwardRef((props, ref) => {
           icon: faLightbulb,
           isTutorial: false,
           isApiAction: false,
+        },
+        {
+          text: "Analyse Student Performance",
+          icon: faGraduationCap,
+          isTutorial: false,
+          isApiAction: false,
+          isStudentAnalysis: true,
         },
       ];
     }
@@ -640,6 +658,140 @@ const ChatBox = forwardRef((props, ref) => {
     } catch (error) {
       console.error("❌ Error fetching exam details:", error);
       return null;
+    }
+  };
+
+  // ====== Student Analysis helpers (teacher only) ======
+  const fetchSaClasses = async () => {
+    setSaLoadingClasses(true);
+    try {
+      const res = await axiosInstance.get("/api/teacher-classes/");
+      setSaClasses(res.data.classes || []);
+    } catch (e) {
+      console.error("Error fetching classes for student analysis:", e);
+    } finally {
+      setSaLoadingClasses(false);
+    }
+  };
+
+  const handleSaClassChange = async (classValue) => {
+    setSaSelectedClass(classValue);
+    setSaSelectedStudent("");
+    setSaSelectedExam("");
+    setSaStudents([]);
+    setSaExams([]);
+    if (!classValue) return;
+    setSaLoadingData(true);
+    try {
+      const examsRes = await axiosInstance.get("/exam-details/");
+      const allExams = examsRes.data.exams || [];
+      const classExams = allExams.filter((e) => e.class_section === classValue);
+      setSaExams(classExams);
+      if (classExams.length > 0) {
+        const studRes = await axiosInstance.get(`/student-results/?exam_id=${classExams[0].id}`);
+        const studentResults = studRes.data.student_results || [];
+        const uniqueStudents = [
+          ...new Set(studentResults.map((s) => s.student_fullname).filter(Boolean)),
+        ];
+        setSaStudents(uniqueStudents);
+      }
+    } catch (e) {
+      console.error("Error fetching exams/students for class:", e);
+    } finally {
+      setSaLoadingData(false);
+    }
+  };
+
+  const formatStudentAnalysisResponse = (data) => {
+    if (!data || data.status !== "success") return "❌ Failed to load student analysis.";
+    const s = data.student;
+    const r = data.exam_result;
+
+    let md = `#### Student Analysis: ${s.name}\n\n`;
+    md += `| Field | Value |\n|---|---|\n`;
+    md += `| Roll No | ${s.roll_number} |\n`;
+    md += `| Class | ${s.class} |\n`;
+    md += `| Exam | ${r.exam_name} |\n`;
+    md += `| Type | ${r.exam_type} |\n`;
+    md += `| Score | **${r.marks_obtained} / ${r.max_marks}** (${r.percentage}%) |\n`;
+    md += `| Grade | **${r.grade}** |\n`;
+    md += `| Rank | ${r.rank_description} |\n`;
+    md += `| Class Average | ${r.class_average} |\n\n`;
+
+    if (r.strengths?.length) {
+      md += `##### Strengths\n`;
+      r.strengths.forEach((item) => { md += `- ${item}\n`; });
+      md += "\n";
+    }
+    if (r.areas_for_improvement?.length) {
+      md += `##### Areas for Improvement\n`;
+      r.areas_for_improvement.forEach((item) => { md += `- ${item}\n`; });
+      md += "\n";
+    }
+    if (r.detailed_analysis?.raw) {
+      md += `##### Detailed Analysis\n${r.detailed_analysis.raw}\n\n`;
+    }
+    if (r.parent_note) {
+      md += `##### Parent Note\n${r.parent_note}\n\n`;
+    }
+    if (r.questions_evaluation?.length) {
+      md += `##### Questions Evaluation\n\n`;
+      md += `| Q# | Max | Score | % | Error Type | Mistakes Made | Gap Analysis |\n`;
+      md += `|---|---|---|---|---|---|---|\n`;
+      r.questions_evaluation.forEach((q) => {
+        const mistakes = (q.mistakes_made || "None").replace(/\|/g, "\\|").replace(/\n/g, " ");
+        const gap = (q.gap_analysis || "None").replace(/\|/g, "\\|").replace(/\n/g, " ");
+        md += `| ${q.question_number} | ${q.max_marks} | ${q.total_score} | ${q.percentage}% | ${q.error_type} | ${mistakes} | ${gap} |\n`;
+      });
+    }
+    return md;
+  };
+
+  const handleStudentAnalysisGo = async () => {
+    if (!saSelectedClass || !saSelectedStudent || !saSelectedExam || !sessionId) return;
+    setShowStudentAnalysisPanel(false);
+
+    const id = Date.now();
+    setMessages((prev) => [
+      ...prev,
+      {
+        id,
+        text: `📊 Analysing ${saSelectedStudent}'s performance in "${saSelectedExam}" (${saSelectedClass})...`,
+        sender: "user",
+        timestamp: new Date(),
+      },
+    ]);
+    setIsTyping(true);
+
+    try {
+      const res = await api.post("/student-analysis", {
+        session_id: sessionId,
+        class_code: saSelectedClass,
+        student_name: saSelectedStudent,
+        exam_name: saSelectedExam,
+      });
+
+      const reply = formatStudentAnalysisResponse(res.data);
+      setMessages((prev) => [
+        ...prev,
+        { id: id + 1, text: reply, sender: "ai", timestamp: new Date() },
+      ]);
+    } catch (e) {
+      console.error("Student analysis error:", e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: id + 1,
+          text: "❌ Failed to fetch student analysis. Please try again.",
+          sender: "ai",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+      setSaSelectedClass("");
+      setSaSelectedStudent("");
+      setSaSelectedExam("");
     }
   };
 
@@ -1289,10 +1441,21 @@ const ChatBox = forwardRef((props, ref) => {
       return;
     }
 
+    // Handle student analysis panel (teacher only)
+    if (suggestion.isStudentAnalysis) {
+      const next = !showStudentAnalysisPanel;
+      setShowStudentAnalysisPanel(next);
+      setShowExamDropdown(false);
+      setShowDurationDropdown(false);
+      if (next && saClasses.length === 0) fetchSaClasses();
+      return;
+    }
+
     // Handle exam dropdown suggestion - toggle dropdown instead of sending
     if (suggestion.isExamDropdown) {
       setShowExamDropdown((prev) => !prev);
       setShowDurationDropdown(false);
+      setShowStudentAnalysisPanel(false);
       return;
     }
 
@@ -1300,6 +1463,7 @@ const ChatBox = forwardRef((props, ref) => {
     if (suggestion.isDurationDropdown) {
       setShowDurationDropdown((prev) => !prev);
       setShowExamDropdown(false);
+      setShowStudentAnalysisPanel(false);
       return;
     }
 
@@ -1651,6 +1815,66 @@ const ChatBox = forwardRef((props, ref) => {
           {/* Suggestion Chips - Above Input */}
           {!isTyping && (
             <>
+              {/* Student Analysis panel - teacher only */}
+              {showStudentAnalysisPanel && userRole === "teacher" && (
+                <div
+                  className="exam-selector-row"
+                  style={{ flexWrap: "wrap", gap: 6, alignItems: "center", padding: "8px 12px" }}
+                >
+                  <span className="exam-selector-label">Analyse:</span>
+
+                  <select
+                    value={saSelectedClass}
+                    onChange={(e) => handleSaClassChange(e.target.value)}
+                    disabled={saLoadingClasses}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.8rem", cursor: "pointer" }}
+                  >
+                    <option value="">{saLoadingClasses ? "Loading…" : "Class"}</option>
+                    {saClasses.map((c, i) => (
+                      <option key={i} value={c.class_name || c}>{c.class_name || c}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={saSelectedStudent}
+                    onChange={(e) => setSaSelectedStudent(e.target.value)}
+                    disabled={saLoadingData || !saSelectedClass}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.8rem", cursor: "pointer" }}
+                  >
+                    <option value="">{saLoadingData ? "Loading…" : "Student"}</option>
+                    {saStudents.map((name, i) => (
+                      <option key={i} value={name}>{name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={saSelectedExam}
+                    onChange={(e) => setSaSelectedExam(e.target.value)}
+                    disabled={saLoadingData || !saSelectedClass}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.8rem", cursor: "pointer" }}
+                  >
+                    <option value="">{saLoadingData ? "Loading…" : "Exam"}</option>
+                    {saExams.map((ex, i) => (
+                      <option key={i} value={ex.name}>{ex.name}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    className="exam-name-chip"
+                    onClick={handleStudentAnalysisGo}
+                    disabled={!saSelectedClass || !saSelectedStudent || !saSelectedExam || isTyping}
+                    style={{
+                      background: saSelectedClass && saSelectedStudent && saSelectedExam ? "#00A0E3" : "#e5e7eb",
+                      color: saSelectedClass && saSelectedStudent && saSelectedExam ? "white" : "#9ca3af",
+                      fontWeight: "600",
+                      padding: "4px 14px",
+                    }}
+                  >
+                    Go →
+                  </button>
+                </div>
+              )}
+
               {/* Exam selector row - shown when dropdown is toggled */}
               {showExamDropdown && (
                 <div className="exam-selector-row">
@@ -1697,7 +1921,8 @@ const ChatBox = forwardRef((props, ref) => {
                     key={index}
                     className={`suggestion-chip ${
                       (suggestion.isExamDropdown && showExamDropdown) ||
-                      (suggestion.isDurationDropdown && showDurationDropdown)
+                      (suggestion.isDurationDropdown && showDurationDropdown) ||
+                      (suggestion.isStudentAnalysis && showStudentAnalysisPanel)
                         ? "active"
                         : ""
                     }`}
@@ -1708,6 +1933,7 @@ const ChatBox = forwardRef((props, ref) => {
                         : !suggestion.isTutorial &&
                           !suggestion.isExamDropdown &&
                           !suggestion.isDurationDropdown &&
+                          !suggestion.isStudentAnalysis &&
                           (connectionStatus !== "connected" || isTyping)
                     }
                     title={
@@ -1719,7 +1945,9 @@ const ChatBox = forwardRef((props, ref) => {
                             ? "Select an exam to analyze"
                             : suggestion.isDurationDropdown
                               ? "Select duration for remedial program"
-                              : `Ask: ${suggestion.text}`
+                              : suggestion.isStudentAnalysis
+                                ? "Select class, student and exam to analyse"
+                                : `Ask: ${suggestion.text}`
                     }
                     style={
                       suggestion.isTutorial
@@ -1753,6 +1981,11 @@ const ChatBox = forwardRef((props, ref) => {
                     {suggestion.isDurationDropdown && (
                       <span style={{ marginLeft: 4, fontSize: "0.7em" }}>
                         {showDurationDropdown ? "▲" : "▼"}
+                      </span>
+                    )}
+                    {suggestion.isStudentAnalysis && (
+                      <span style={{ marginLeft: 4, fontSize: "0.7em" }}>
+                        {showStudentAnalysisPanel ? "▲" : "▼"}
                       </span>
                     )}
                   </button>

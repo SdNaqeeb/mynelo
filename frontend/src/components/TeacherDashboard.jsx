@@ -474,6 +474,11 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
 
+  // Section selection (required for homework submission)
+  const [sections, setSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState('');
+  const [loadingSections, setLoadingSections] = useState(false);
+
   // New fields for worksheet upload - matching backend API structure
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -560,6 +565,35 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
     }
     fetchClasses();
   }, []);
+
+  // Fetch sections when class is selected
+  useEffect(() => {
+    async function fetchSections() {
+      if (!selectedClass) {
+        setSections([]);
+        setSelectedSection("");
+        return;
+      }
+      try {
+        setLoadingSections(true);
+        const selectedClassObj = classes.find(c => c.class_code === selectedClass || c.id === selectedClass);
+        const className = selectedClassObj?.class_name || selectedClassObj?.name || selectedClass;
+        const formData = new FormData();
+        formData.append('class_name', className);
+        const response = await axiosInstance.post('/api/teacher-sections/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setSections(response.data.sections || []);
+        setSelectedSection("");
+      } catch (error) {
+        console.error("Error fetching sections:", error);
+        setSections([]);
+      } finally {
+        setLoadingSections(false);
+      }
+    }
+    fetchSections();
+  }, [selectedClass, classes]);
 
   const openDeleteModal = (name) => {
     setWorksheetToDelete(name);
@@ -868,6 +902,12 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
       return;
     }
 
+    if (!selectedSection || !selectedSubject) {
+      setError("Please select a section and subject");
+      setIsSubmitting(false);
+      return;
+    }
+
     // Validation for image assignments
     if (submissionType === 'image' && !imageFile) {
       setError('Please upload an image for image assignments');
@@ -883,8 +923,8 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
         formData = new FormData();
         formData.append('homework_code', homework_code.trim());
         formData.append('title', title.trim());
-        formData.append('teacherId', user.username);
-        formData.append('classId', user.id);
+        formData.append('section_id', parseInt(selectedSection));
+        formData.append('subject_id', selectedSubject);
         formData.append('due_date', new Date(dueDate).toISOString());
         formData.append('date_assigned', new Date().toISOString());
         formData.append('image', imageFile);
@@ -893,8 +933,8 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
         formData = {
           homework_code: homework_code.trim(),
           title: title.trim(),
-          teacherId: user.username,
-          classId: user.id,
+          section_id: parseInt(selectedSection),
+          subject_id: selectedSubject,
           due_date: new Date(dueDate).toISOString(),
           date_assigned: new Date().toISOString(),
         };
@@ -915,6 +955,8 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
       setSubmissionType("worksheet");
       setHomeworkCode("");
       setImageSourceType("upload");
+      setSelectedSection("");
+      setSelectedSubject("");
 
       // Reset file inputs
       const imageInput = document.getElementById('assignment-image');
@@ -1114,6 +1156,63 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
             {/* Common fields for Text and Image assignment types only */}
             {submissionType !== 'worksheet' && (
               <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="classSelect" className="font-semibold text-gray-700 text-sm tracking-wide">Class <span className="text-red-500">*</span></label>
+                    <select
+                      id="classSelect"
+                      className="px-4 py-3.5 border-2 border-gray-200 rounded-xl text-[0.95rem] transition-all duration-300 bg-white focus:outline-none focus:border-[#00A0E3] focus:ring-2 focus:ring-[#00A0E3]/10"
+                      value={selectedClass}
+                      onChange={(e) => setSelectedClass(e.target.value)}
+                    >
+                      <option value="">Select Class</option>
+                      {classes.map((cls) => (
+                        <option key={cls.class_code || cls.id} value={cls.class_code || cls.id}>
+                          {cls.class_name || cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="sectionSelect" className="font-semibold text-gray-700 text-sm tracking-wide">Section <span className="text-red-500">*</span></label>
+                    <select
+                      id="sectionSelect"
+                      className="px-4 py-3.5 border-2 border-gray-200 rounded-xl text-[0.95rem] transition-all duration-300 bg-white focus:outline-none focus:border-[#00A0E3] focus:ring-2 focus:ring-[#00A0E3]/10"
+                      value={selectedSection}
+                      onChange={(e) => setSelectedSection(e.target.value)}
+                      disabled={loadingSections || sections.length === 0}
+                    >
+                      <option value="">
+                        {loadingSections ? 'Loading...' : sections.length === 0 ? 'Select class first' : 'Select Section'}
+                      </option>
+                      {sections.map((sec, index) => (
+                        <option key={sec.section_id || index} value={sec.section_id}>
+                          {sec.section_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="subjectSelect" className="font-semibold text-gray-700 text-sm tracking-wide">Subject <span className="text-red-500">*</span></label>
+                    <select
+                      id="subjectSelect"
+                      className="px-4 py-3.5 border-2 border-gray-200 rounded-xl text-[0.95rem] transition-all duration-300 bg-white focus:outline-none focus:border-[#00A0E3] focus:ring-2 focus:ring-[#00A0E3]/10"
+                      value={selectedSubject}
+                      onChange={(e) => setSelectedSubject(e.target.value)}
+                      disabled={subjects.length === 0}
+                    >
+                      <option value="">
+                        {subjects.length === 0 ? 'Select class first' : 'Select Subject'}
+                      </option>
+                      {subjects.map((sub) => (
+                        <option key={sub.subject_code || sub.id} value={sub.subject_code || sub.id}>
+                          {sub.subject_name || sub.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="homework_code" className="font-semibold text-gray-700 text-sm tracking-wide">Homework Code</label>
                   <input
@@ -1125,8 +1224,8 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
                     placeholder="Enter homework code"
                     required
                   />
-                </div>          
-                
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="title" className="font-semibold text-gray-700 text-sm tracking-wide">Assignment Title</label>
                   <input
@@ -1541,6 +1640,7 @@ const TeacherDashboard = ({ user, assignments, submissions, onAssignmentSubmit }
         onQuestionClick={handleQuestionClick}
         isMultipleSelect={isPreviewMode} // Enable multiple selection in preview mode
         onMultipleSelectSubmit={handleMultipleSelectSubmit}
+        submitLabel="Continue with Selected Questions"
       />
 
       {/* View Questions Modal */}
