@@ -31,10 +31,6 @@ const ExamCorrection = () => {
   // STEP 1: Correction mode selection
   const [correctionMode, setCorrectionMode] = useState(null);
 
-  const HARDCODED_SUBJECTS = ["MATHEMATICS", "SCIENCE", "PHYSICS", "CHEMISTRY", "ENGLISH"];
-  const ADMISSION_SUBJECTS = ["MATHEMATICS", "SCIENCE", "ENGLISH", "EVS"];
-  const availableSubjects = examType.toLowerCase().includes("admission") ? ADMISSION_SUBJECTS : HARDCODED_SUBJECTS;
-
   // STEP 2A: For existing correction - exam selection
   const [existingExams, setExistingExams] = useState([]);
   const [selectedExistingExam, setSelectedExistingExam] = useState(null);
@@ -55,6 +51,10 @@ const ExamCorrection = () => {
   // Form state
   const [examName, setExamName] = useState("");
   const [examType, setExamType] = useState("");
+
+  const HARDCODED_SUBJECTS = ["MATHEMATICS", "SCIENCE", "PHYSICS", "CHEMISTRY", "ENGLISH"];
+  const ADMISSION_SUBJECTS = ["MATHEMATICS", "SCIENCE", "EVS", "ENGLISH"];
+  const availableSubjects = (correctionMode === "admission" || examType.toLowerCase().includes("admission")) ? ADMISSION_SUBJECTS : HARDCODED_SUBJECTS;
   const [className, setClassName] = useState("");
   const [section, setSection] = useState("");
   const [subject, setSubject] = useState("");
