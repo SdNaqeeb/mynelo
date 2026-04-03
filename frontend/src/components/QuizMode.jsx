@@ -696,6 +696,53 @@ const QuizMode = () => {
     }
   };
 
+  // ADD this new handler above handleJeeGenerate
+  const handleJeeRevise = async () => {
+    if (!jeeSelectedClass || jeeSelectedChapters.length === 0) return;
+    setLoadingCheatsheet(true);
+    setError("");
+
+    const classNum =
+      Number(String(jeeSelectedClass).replace(/\D/g, "")) ||
+      Number(jeeSelectedClass);
+    const formattedChapters = jeeSelectedChapters.map((ch) =>
+      formatChapterName(ch),
+    );
+
+    try {
+      const res = await fetchCheatsheet({
+        class_num: classNum,
+        chapters: formattedChapters,
+        subject: jeeSelectedSubjectQuizCode, // quiz-API string e.g. "JEE_FOUNDATION_MATH"
+      });
+      const raw = res.data;
+      const sheets = Array.isArray(raw) ? raw : raw.sheets || [];
+      if (sheets.length > 0) {
+        const normalized = {
+          class_num: classNum,
+          total_sheets: sheets.length,
+          sheets,
+          _jeeMode: true, // flag so cheatsheet footer knows to call handleJeeGenerate
+        };
+        setCheatsheetData(normalized);
+        setExpandedSheets(Object.fromEntries(sheets.map((_, i) => [i, true])));
+        setShowCheatsheet(true);
+      } else {
+        // No sheets — generate directly
+        handleJeeGenerate();
+      }
+    } catch (err) {
+      // Cheatsheet unavailable — generate directly
+      console.warn(
+        "JEE cheatsheet not available, generating directly:",
+        err.response?.data?.detail,
+      );
+      handleJeeGenerate();
+    } finally {
+      setLoadingCheatsheet(false);
+    }
+  };
+
   // ── JEE Foundation generate handler ──
   const handleJeeGenerate = async () => {
     if (!jeeSelectedClass || jeeSelectedChapters.length === 0) return;
@@ -1170,86 +1217,43 @@ const QuizMode = () => {
                       transition={{ duration: 0.35, delay: 0.1 }}
                     >
                       <div className="quiz-action-buttons">
-                        {isRetakeFlow ? (
-                          <button
-                            className="quiz-start-btn"
-                            onClick={handleRevise}
-                            disabled={loadingCheatsheet || generating}
-                            style={{ flex: 1 }}
-                          >
-                            {loadingCheatsheet ? (
-                              <>
-                                <div
-                                  className="quiz-spinner"
-                                  style={{
-                                    width: 18,
-                                    height: 18,
-                                    borderWidth: 2,
-                                  }}
-                                />
-                                Loading Cheatsheet...
-                              </>
-                            ) : (
-                              <>
-                                <span className="btn-shimmer" />
-                                📋 Revise & Start Test
-                              </>
-                            )}
-                          </button>
-                        ) : hasHistory ? (
-                          <button
-                            className="quiz-start-btn"
-                            onClick={handleRevise}
-                            disabled={loadingCheatsheet || generating}
-                            style={{ flex: 1 }}
-                          >
-                            {loadingCheatsheet ? (
-                              <>
-                                <div
-                                  className="quiz-spinner"
-                                  style={{
-                                    width: 18,
-                                    height: 18,
-                                    borderWidth: 2,
-                                  }}
-                                />
-                                Loading Cheatsheet...
-                              </>
-                            ) : (
-                              <>
-                                <span className="btn-shimmer" />
-                                📋 Revise & Start Test
-                              </>
-                            )}
-                          </button>
-                        ) : (
-                          // Fresh chapter → go directly
-                          <button
-                            className="quiz-start-btn"
-                            onClick={handleGenerate}
-                            disabled={generating}
-                            style={{ flex: 1 }}
-                          >
-                            {generating ? (
-                              <>
-                                <div
-                                  className="quiz-spinner"
-                                  style={{
-                                    width: 18,
-                                    height: 18,
-                                    borderWidth: 2,
-                                  }}
-                                />
-                                Generating...
-                              </>
-                            ) : (
-                              <>
-                                <span className="btn-shimmer" />
-                                Start Test
-                              </>
-                            )}
-                          </button>
-                        )}
+                        <button
+                          className="quiz-start-btn"
+                          onClick={handleRevise}
+                          disabled={loadingCheatsheet || generating}
+                          style={{ flex: 1 }}
+                        >
+                          {loadingCheatsheet ? (
+                            <>
+                              <div
+                                className="quiz-spinner"
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderWidth: 2,
+                                }}
+                              />
+                              Loading Cheatsheet...
+                            </>
+                          ) : generating ? (
+                            <>
+                              <div
+                                className="quiz-spinner"
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderWidth: 2,
+                                }}
+                              />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <span className="btn-shimmer" />
+                              📋 Revise & Start Test
+                            </>
+                          )}
+                        </button>
                       </div>
                     </motion.div>
                   )}
@@ -1362,21 +1366,38 @@ const QuizMode = () => {
                       <div className="quiz-section-label">
                         <span className="quiz-section-num">2</span>
                         <span>Select Subject</span>
+                        {jeeSelectedSubject && (
+                          <span className="quiz-section-count">1 selected</span>
+                        )}
                       </div>
                       {jeeLoadingSubjects ? (
-                        <div
-                          className="quiz-spinner"
-                          style={{ width: 20, height: 20 }}
-                        />
+                        <div className="quiz-empty-state">
+                          <div
+                            className="quiz-spinner"
+                            style={{ margin: "0 auto", width: 32, height: 32 }}
+                          />
+                        </div>
                       ) : (
-                        <div className="quiz-chip-row">
+                        <div className="quiz-subject-grid">
                           {jeeSubjects.map((sub) => {
                             const isSel =
                               jeeSelectedSubject === sub.subject_code;
+                            const name = sub.subject_name.toUpperCase();
+                            const icon = name.includes("SCIENCE")
+                              ? "🔬"
+                              : name.includes("PHYSICS")
+                                ? "⚛️"
+                                : name.includes("CHEMISTRY")
+                                  ? "🧪"
+                                  : "📐";
+                            const displayName = sub.subject_name
+                              .replace(/_/g, " ")
+                              .toLowerCase()
+                              .replace(/\b\w/g, (c) => c.toUpperCase());
                             return (
                               <motion.button
                                 key={sub.subject_code}
-                                className={`quiz-chip ${isSel ? "selected" : ""}`}
+                                className={`quiz-subject-chip ${isSel ? "selected" : ""}`}
                                 onClick={() => {
                                   setJeeSelectedSubject(sub.subject_code);
                                   setJeeSelectedSubjectQuizCode(
@@ -1391,14 +1412,10 @@ const QuizMode = () => {
                                 }}
                                 whileTap={{ scale: 0.97 }}
                               >
-                                <span
-                                  className={`quiz-chip-check ${isSel ? "visible" : ""}`}
-                                >
-                                  ✓
+                                <span className="quiz-subject-icon">
+                                  {icon}
                                 </span>
-                                <span className="quiz-chip-text">
-                                  {sub.subject_name}
-                                </span>
+                                <span>{displayName}</span>
                               </motion.button>
                             );
                           })}
@@ -1418,12 +1435,10 @@ const QuizMode = () => {
                       exit={{ opacity: 0, y: -12 }}
                     >
                       <div className="quiz-section-label">
-                        <span className="quiz-section-num">2</span>
+                        <span className="quiz-section-num">3</span>
                         <span>Select Chapter</span>
-                        {jeeSelectedChapters.length > 0 && (
-                          <span className="quiz-section-count">
-                            {jeeSelectedChapters.length} selected
-                          </span>
+                        {jeeSelectedChapters.length === 1 && (
+                          <span className="quiz-section-count">1 selected</span>
                         )}
                       </div>
                       <div className="quiz-chapter-search">
@@ -1444,17 +1459,15 @@ const QuizMode = () => {
                       ) : (
                         <div className="quiz-chapter-grid">
                           {jeeFilteredChapters.map((ch) => {
-                            const isSelected = jeeSelectedChapters.includes(ch);
+                            const isSelected =
+                              jeeSelectedChapters.length === 1 &&
+                              jeeSelectedChapters[0] === ch;
                             return (
                               <motion.button
                                 key={ch}
                                 className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
                                 onClick={() => {
-                                  const newSelected = isSelected
-                                    ? jeeSelectedChapters.filter(
-                                        (c) => c !== ch,
-                                      )
-                                    : [...jeeSelectedChapters, ch];
+                                  const newSelected = isSelected ? [] : [ch];
                                   setJeeSelectedChapters(newSelected);
                                   setJeeSelectedChapterObjects(
                                     jeeChapterObjects.filter((obj) =>
@@ -1466,10 +1479,8 @@ const QuizMode = () => {
                                 whileTap={{ scale: 0.97 }}
                               >
                                 <span
-                                  className={`quiz-chip-check ${isSelected ? "visible" : ""}`}
-                                >
-                                  ✓
-                                </span>
+                                  className={`quiz-chip-radio ${isSelected ? "visible" : ""}`}
+                                />
                                 <span className="quiz-chip-text">
                                   {formatChapterName(ch)}
                                 </span>
@@ -1564,7 +1575,7 @@ const QuizMode = () => {
                       transition={{ duration: 0.35, delay: 0.05 }}
                     >
                       <div className="quiz-section-label">
-                        <span className="quiz-section-num">3</span>
+                        <span className="quiz-section-num">4</span>
                         <span>Select Difficulty Level</span>
                       </div>
                       <div className="jee-difficulty-grid">
@@ -1590,11 +1601,23 @@ const QuizMode = () => {
                       <div style={{ marginTop: 20 }}>
                         <button
                           className="quiz-start-btn"
-                          onClick={handleJeeGenerate}
-                          disabled={generating}
+                          onClick={handleJeeRevise}
+                          disabled={loadingCheatsheet || generating}
                           style={{ width: "100%" }}
                         >
-                          {generating ? (
+                          {loadingCheatsheet ? (
+                            <>
+                              <div
+                                className="quiz-spinner"
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderWidth: 2,
+                                }}
+                              />
+                              Loading Cheatsheet...
+                            </>
+                          ) : generating ? (
                             <>
                               <div
                                 className="quiz-spinner"
@@ -1609,7 +1632,7 @@ const QuizMode = () => {
                           ) : (
                             <>
                               <span className="btn-shimmer" />
-                              Start Test
+                              📋 Revise & Start Test
                             </>
                           )}
                         </button>
@@ -1979,24 +2002,15 @@ const QuizMode = () => {
                     className="cheatsheet-start-btn"
                     onClick={() => {
                       setShowCheatsheet(false);
-                      handleGenerate();
+                      if (cheatsheetData?._jeeMode) {
+                        handleJeeGenerate();
+                      } else {
+                        handleGenerate();
+                      }
                     }}
                     disabled={generating}
                   >
-                    {generating ? (
-                      <>
-                        <div
-                          className="quiz-spinner"
-                          style={{ width: 18, height: 18, borderWidth: 2 }}
-                        />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <span className="btn-shimmer" />
-                        Start Test
-                      </>
-                    )}
+                    {generating ? "Generating..." : "Start Test →"}
                   </button>
                 </div>
               </motion.div>

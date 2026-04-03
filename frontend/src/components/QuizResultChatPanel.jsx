@@ -228,7 +228,7 @@ const SimilarQuestionMCQ = ({ parsed, onNext }) => {
   );
 };
 
-// ─── Build the structured query sent to /test-prep-analysis ──────────────────
+// unanswered questions are included, shown as "Not Attempted"
 const buildStructuredQuery = (
   questions = [],
   answers = [],
@@ -236,7 +236,8 @@ const buildStructuredQuery = (
   subject,
 ) => {
   const qbq = buildQuestionByQuestion(questions, answers);
-  const wrong = qbq.filter((q) => !q.is_correct && !q.is_unanswered);
+  // Include both attempted-wrong AND unanswered — exclude only correct
+  const wrong = qbq.filter((q) => !q.is_correct);
   if (wrong.length === 0) return JSON.stringify({ questions: [] });
 
   const blocks = wrong.map((q, idx) => {
@@ -251,7 +252,7 @@ const buildStructuredQuery = (
       `Chapter: ${q.chapter || "N/A"}`,
       `Options: ${optionLine}`,
       `Correct Answer: ${q.correct_answer}`,
-      `Student Answer: ${q.selected_option}`,
+      `Student Answer: ${q.is_unanswered ? "Not Attempted" : q.selected_option}`,
       `Trap: ${trap}`,
     ].join("\n");
   });
@@ -272,6 +273,7 @@ const buildLocalFallback = (evalData, classNum, subject) => {
 };
 
 // ─── Score Review Panel (Image 1) ────────────────────────────────────────────
+// — unanswered rows show ❌ with "Not attempted" sub-label
 const ScoreReviewPanel = ({
   questions,
   answerMap,
@@ -290,6 +292,7 @@ const ScoreReviewPanel = ({
       {questions.map((q, idx) => {
         const selected = answerMap[q.question_num] || "";
         const isCorrect = selected && selected === q.correct_answer;
+        const isUnanswered = !selected;
         return (
           <div
             key={idx}
@@ -298,6 +301,17 @@ const ScoreReviewPanel = ({
             <span className="sb-q-icon">{isCorrect ? "✅" : "❌"}</span>
             <span className="sb-q-text">
               {idx + 1}. <MarkdownWithMath content={q.question} />
+              {isUnanswered && (
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#94a3b8",
+                    marginLeft: 6,
+                  }}
+                >
+                  (not attempted)
+                </span>
+              )}
             </span>
           </div>
         );
@@ -513,19 +527,23 @@ const QuizResultChatPanel = ({
     [questions, answers],
   );
 
-  // Wrong questions from parsed analysis
+  // AFTER — also compute local count of all non-correct questions (wrong + unanswered)
   const wrongQuestions = useMemo(
     () => analysisData?.questions || [],
     [analysisData],
   );
 
-  // Find original question object matching a wrong question entry
+  const localWrongCount = useMemo(() => {
+    const qbq = buildQuestionByQuestion(questions, answers);
+    return qbq.filter((q) => !q.is_correct).length;
+  }, [questions, answers]);
+
+  // matches the same filter used in buildStructuredQuery
   const findOriginalQuestion = (wrongQ) => {
     if (!wrongQ) return null;
-    // wrongQ.questionId = "Q1", "Q2" etc — backend numbers them by wrong index
-    // We match by finding the wrong answer at that position in questions array
+    // Must match the filter in buildStructuredQuery: all non-correct (wrong + unanswered)
     const wrongQbq = buildQuestionByQuestion(questions, answers).filter(
-      (q) => !q.is_correct && !q.is_unanswered,
+      (q) => !q.is_correct, // ← includes unanswered
     );
     const idx = parseInt((wrongQ.questionId || "Q1").replace("Q", ""), 10) - 1;
     const enriched = wrongQbq[idx];
@@ -785,12 +803,12 @@ const QuizResultChatPanel = ({
                   </div>
                 )}
 
-                {wrongQuestions.length > 0 ? (
+                {localWrongCount > 0 ? (
                   <div className="sb-bot-bubble">
                     <div className="sb-tackle-msg">
-                      You got <strong>{wrongQuestions.length}</strong> question
-                      {wrongQuestions.length > 1 ? "s" : ""} wrong. Want to work
-                      through them together?
+                      You got <strong>{localWrongCount}</strong> question
+                      {localWrongCount > 1 ? "s" : ""} wrong (including
+                      unanswered). Want to work through them together?
                     </div>
                     <button className="sb-tackle-btn" onClick={startTackling}>
                       Let's Tackle Them Together

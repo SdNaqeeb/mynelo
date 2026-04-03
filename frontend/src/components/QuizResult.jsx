@@ -296,6 +296,77 @@ const QuizResult = () => {
     }
   };
 
+  /* ── JEE: shared self-study navigate ── */
+  const handleJeeSelfStudy = () => {
+    navigate("/student-dash", {
+      state: {
+        prefill: {
+          isJeeFoundation: true,
+          source: "jee_testprep",
+          fromQuizResult: true,
+          ...(jeeSelection
+            ? {
+                classCode: jeeSelection.classCode,
+                subjectCode: jeeSelection.subjectCode,
+                subjectName: jeeSelection.subjectName,
+                chapterCode: jeeSelection.chapterCode,
+                chapterName: jeeSelection.chapterName,
+                subtopics: jeeSelection.subtopics || [],
+                hasExactBoardIds: true,
+              }
+            : {
+                classCode: String(jeeSelectedClass),
+                subjectCode: jeeSelectedSubject,
+                subjectName: jeeSelectedSubject,
+                chapterName: (state?.selectedChapters || [])[0] || "",
+                subtopics: state?.selectedSubtopics || [],
+                hasExactBoardIds: false,
+              }),
+        },
+        autoFetch: true,
+      },
+    });
+  };
+
+  /* ── JEE: shared retake at a given difficulty level ── */
+  const handleJeeRetake = async (difficultyLevel) => {
+    setRetakeLoading(true);
+    setRetakeError("");
+    try {
+      const res = await generateQuestions({
+        class_num: Number(jeeSelectedClass),
+        chapters: state?.selectedChapters || [],
+        questions_per_chapter: state?.questionsPerChapter || 5,
+        subject: jeeSelectedSubject,
+        difficulty_level: difficultyLevel,
+        ...(state?.selectedSubtopics?.length > 0 && {
+          sub_topics: state.selectedSubtopics,
+        }),
+      });
+      navigate("/quiz-question", {
+        state: {
+          quizData: res.data,
+          classNum: Number(jeeSelectedClass),
+          selectedChapters: state?.selectedChapters || [],
+          questionsPerChapter: state?.questionsPerChapter || 5,
+          subject: jeeSelectedSubject,
+          selectedSubtopics: state?.selectedSubtopics || [],
+          isJeeFoundation: true,
+          jeeDifficulty: difficultyLevel,
+          jeeSelectedSubject,
+          jeeSelectedClass,
+          jeeSelection,
+        },
+      });
+    } catch (err) {
+      setRetakeError(
+        err.response?.data?.detail || "Failed to regenerate questions.",
+      );
+    } finally {
+      setRetakeLoading(false);
+    }
+  };
+
   /* ── state ── */
   const [showFullRemedial, setShowFullRemedial] = useState(false);
   const [expandedRepair, setExpandedRepair] = useState({});
@@ -956,34 +1027,47 @@ const QuizResult = () => {
     <>
       {sheet.formulas?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <h4
+          <div
             style={{
-              fontSize: 14,
               fontWeight: 700,
+              fontSize: 13,
+              opacity: 0.6,
               marginBottom: 8,
-              color: "#4338ca",
             }}
           >
-            📐 Formulas & Rules ({sheet.formulas.length})
-          </h4>
+            📐 Formulas & Rules
+          </div>
           {sheet.formulas.map((f, i) => (
             <div
               key={i}
               style={{
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 8,
+                background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+                borderRadius: 10,
+                padding: "12px 14px",
+                marginBottom: 10,
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "#e2e8f0"}`,
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>{f.name}</div>
-              <MarkdownWithMath content={f.formula} />
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+                <MarkdownWithMath content={f.name} />
+              </div>
+              <div
+                style={{
+                  fontFamily: "monospace",
+                  background: isDark ? "rgba(99,102,241,0.1)" : "#eef2ff",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  marginBottom: 8,
+                  fontSize: 13,
+                }}
+              >
+                <MarkdownWithMath content={f.formula} />
+              </div>
+              <div style={{ fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
                 <strong>When to use:</strong>{" "}
                 <MarkdownWithMath content={f.when_to_use} />
               </div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+              <div style={{ fontSize: 13, opacity: 0.8 }}>
                 <strong>Example:</strong>{" "}
                 <MarkdownWithMath content={f.example} />
               </div>
@@ -993,36 +1077,40 @@ const QuizResult = () => {
       )}
       {sheet.strategies?.length > 0 && (
         <div>
-          <h4
+          <div
             style={{
-              fontSize: 14,
               fontWeight: 700,
+              fontSize: 13,
+              opacity: 0.6,
               marginBottom: 8,
-              color: "#4338ca",
             }}
           >
-            💡 Strategies & Tricks ({sheet.strategies.length})
-          </h4>
+            💡 Strategies & Tricks
+          </div>
           {sheet.strategies.map((s, i) => (
             <div
               key={i}
               style={{
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 8,
+                background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+                borderRadius: 10,
+                padding: "12px 14px",
+                marginBottom: 10,
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "#e2e8f0"}`,
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
                 <MarkdownWithMath content={s.name} />
               </div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>
+              <div style={{ fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
                 <strong>Trick:</strong> <MarkdownWithMath content={s.trick} />
               </div>
-              <div style={{ fontSize: 12, color: "#92400e", marginTop: 4 }}>
-                <strong>Why students miss:</strong>{" "}
+              <div style={{ fontSize: 13, marginBottom: 4, opacity: 0.8 }}>
+                <strong>Why students miss this:</strong>{" "}
                 <MarkdownWithMath content={s.why_missed} />
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.8 }}>
+                <strong>Example:</strong>{" "}
+                <MarkdownWithMath content={s.example} />
               </div>
             </div>
           ))}
@@ -1081,6 +1169,46 @@ const QuizResult = () => {
     }
   };
 
+  /* ── Helper: generate JEE retake questions and navigate ── */
+  const generateAndNavigateJeeRetake = async (chaptersForRetake) => {
+    setRetakeLoading(true);
+    setRetaking(true);
+    try {
+      const res = await generateQuestions({
+        class_num: Number(jeeSelectedClass),
+        chapters: chaptersForRetake,
+        questions_per_chapter: state?.questionsPerChapter || 5,
+        subject: jeeSelectedSubject,
+        ...(jeeDifficulty && { difficulty_level: jeeDifficulty }),
+        ...(state?.selectedSubtopics?.length > 0 && {
+          sub_topics: state.selectedSubtopics,
+        }),
+      });
+      navigate("/quiz-question", {
+        state: {
+          quizData: res.data,
+          classNum: Number(jeeSelectedClass),
+          selectedChapters: chaptersForRetake,
+          questionsPerChapter: state?.questionsPerChapter || 5,
+          subject: jeeSelectedSubject,
+          selectedSubtopics: state?.selectedSubtopics || [],
+          isJeeFoundation: true,
+          jeeDifficulty: jeeDifficulty,
+          jeeSelectedSubject: jeeSelectedSubject,
+          jeeSelectedClass: jeeSelectedClass,
+        },
+      });
+    } catch (err) {
+      setRetakeError(
+        err.response?.data?.detail ||
+          "Failed to generate new questions. Please try again.",
+      );
+      setRetakeLoading(false);
+    } finally {
+      setRetaking(false);
+    }
+  };
+
   /* ── Retake: regenerate fresh questions for the same chapters ── */
   /* ── JEE Foundation: skip cheatsheet modal, generate directly  ── */
   /* ── Board: fetch cheatsheet first, then show modal            ── */
@@ -1094,44 +1222,61 @@ const QuizResult = () => {
       return;
     }
 
-    // ── JEE Foundation path: no cheatsheet step, generate directly ──
+    // AFTER — JEE retake also shows cheatsheet first
+    // ── JEE Foundation path: fetch cheatsheet first, then show modal ──
     if (isJeeFoundation) {
+      setLoadingCheatsheet(true);
       setRetakeLoading(true);
       setRetakeError("");
+
       try {
-        const res = await generateQuestions({
+        const res = await fetchCheatsheet({
           class_num: Number(jeeSelectedClass),
           chapters: chaptersForRetake,
-          questions_per_chapter: state?.questionsPerChapter || 5,
           subject: jeeSelectedSubject,
-          ...(jeeDifficulty && { difficulty_level: jeeDifficulty }),
           ...(state?.selectedSubtopics?.length > 0 && {
             sub_topics: state.selectedSubtopics,
           }),
         });
-        navigate("/quiz-question", {
-          state: {
-            quizData: res.data,
-            classNum: Number(jeeSelectedClass),
-            selectedChapters: chaptersForRetake,
-            questionsPerChapter: state?.questionsPerChapter || 5,
-            subject: jeeSelectedSubject,
-            selectedSubtopics: state?.selectedSubtopics || [],
-            isJeeFoundation: true,
-            jeeDifficulty: jeeDifficulty,
-            jeeSelectedSubject: jeeSelectedSubject,
-            jeeSelectedClass: jeeSelectedClass,
-          },
-        });
+
+        const raw = res.data;
+        const sheets = Array.isArray(raw) ? raw : raw.sheets || [];
+
+        if (sheets.length > 0) {
+          setCheatsheetData({
+            class_num: Number(jeeSelectedClass),
+            total_sheets: sheets.length,
+            sheets,
+            _retakeConfig: {
+              chapters: chaptersForRetake,
+              questionsPerChapter: state?.questionsPerChapter || 5,
+              subtopics: state?.selectedSubtopics || [],
+              isJeeFoundation: true, // ← flag so handleCheatsheetStartTest routes correctly
+              jeeSubject: jeeSelectedSubject,
+              jeeClass: jeeSelectedClass,
+              jeeDifficulty: jeeDifficulty,
+            },
+          });
+          setExpandedSheets(
+            Object.fromEntries(sheets.map((_, i) => [i, true])),
+          );
+          setShowCheatsheet(true);
+          setRetakeLoading(false);
+          setLoadingCheatsheet(false);
+        } else {
+          // No sheets — generate directly
+          setLoadingCheatsheet(false);
+          await generateAndNavigateJeeRetake(chaptersForRetake);
+        }
       } catch (err) {
-        setRetakeError(
-          err.response?.data?.detail ||
-            "Failed to generate new questions. Please try again.",
+        console.warn(
+          "JEE cheatsheet not available, retaking directly:",
+          err.response?.data?.detail,
         );
-      } finally {
-        setRetakeLoading(false);
+        setLoadingCheatsheet(false);
+        await generateAndNavigateJeeRetake(chaptersForRetake);
       }
-      return; // ← stop here for JEE, don't fall through to Board path
+      return;
     }
 
     // ── Board path: fetch cheatsheet first, then show modal ──
@@ -1218,11 +1363,15 @@ const QuizResult = () => {
     }
   };
 
-  /* ── Called when user clicks "Start Test" in cheatsheet modal ── */
+  // AFTER — JEE retake and Board retake each go through their own generate helper
   const handleCheatsheetStartTest = async () => {
     setShowCheatsheet(false);
     const config = cheatsheetData?._retakeConfig;
-    if (config) {
+    if (!config) return;
+
+    if (config.isJeeFoundation) {
+      await generateAndNavigateJeeRetake(config.chapters);
+    } else {
       await generateAndNavigateRetake(config.chapters);
     }
   };
@@ -2048,59 +2197,17 @@ const QuizResult = () => {
               <>
                 <p className="qr-ss-message">
                   {scorePct >= 60
-                    ? "You've cleared Level 1. Ready to move up to Level 2 — Medium?"
-                    : "You scored below 60% on Easy. You can retake this level or push ahead to Medium."}
+                    ? "You've cleared Level 1 — Easy! Move up or practice more with Self Study."
+                    : "Keep practising. Retake Level 1, try Self Study, or push ahead to Level 2."}
                 </p>
                 <div className="qr-ss-actions">
-                  {scorePct < 60 && (
-                    <button
-                      className="qr-ss-btn secondary"
-                      onClick={async () => {
-                        setRetakeLoading(true);
-                        setRetakeError("");
-                        try {
-                          const res = await generateQuestions({
-                            class_num: Number(jeeSelectedClass),
-                            chapters: state?.selectedChapters || [],
-                            questions_per_chapter:
-                              state?.questionsPerChapter || 5,
-                            subject: jeeSelectedSubject,
-                            difficulty_level: "Easy",
-                            ...(state?.selectedSubtopics?.length > 0 && {
-                              sub_topics: state.selectedSubtopics,
-                            }),
-                          });
-                          navigate("/quiz-question", {
-                            state: {
-                              quizData: res.data,
-                              classNum: Number(jeeSelectedClass),
-                              selectedChapters: state?.selectedChapters || [],
-                              questionsPerChapter:
-                                state?.questionsPerChapter || 5,
-                              subject: jeeSelectedSubject,
-                              selectedSubtopics: state?.selectedSubtopics || [],
-                              isJeeFoundation: true,
-                              jeeDifficulty: "Easy",
-                              jeeSelectedSubject,
-                              jeeSelectedClass,
-                            },
-                          });
-                        } catch (err) {
-                          setRetakeError(
-                            err.response?.data?.detail ||
-                              "Failed to regenerate questions.",
-                          );
-                        } finally {
-                          setRetakeLoading(false);
-                        }
-                      }}
-                      disabled={retakeLoading}
-                    >
-                      {retakeLoading
-                        ? "Preparing…"
-                        : "🔁 Retake Level 1 — Easy"}
-                    </button>
-                  )}
+                  <button
+                    className="qr-ss-btn secondary"
+                    onClick={() => handleJeeRetake("Easy")}
+                    disabled={retakeLoading}
+                  >
+                    {retakeLoading ? "Preparing…" : "🔁 Retake Level 1 — Easy"}
+                  </button>
                   <button
                     className="qr-ss-btn primary"
                     onClick={handleNextLevel}
@@ -2109,6 +2216,13 @@ const QuizResult = () => {
                     {retakeLoading
                       ? "Preparing…"
                       : "⬆️ Move to Level 2 — Medium"}
+                  </button>
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={handleJeeSelfStudy}
+                    disabled={retakeLoading}
+                  >
+                    🚀 Go to Self Study
                   </button>
                 </div>
               </>
@@ -2119,65 +2233,32 @@ const QuizResult = () => {
               <>
                 <p className="qr-ss-message">
                   {scorePct >= 60
-                    ? "You've cleared Level 2. Ready for the hardest level?"
-                    : "You scored below 60% on Medium. Retake to strengthen the concepts or push on to Hard."}
+                    ? "You've cleared Level 2 — Medium! Push to the hardest level or deepen your practice."
+                    : "Keep going. Retake Level 2, explore Self Study, or challenge yourself with Level 3."}
                 </p>
                 <div className="qr-ss-actions">
-                  {scorePct < 60 && (
-                    <button
-                      className="qr-ss-btn secondary"
-                      onClick={async () => {
-                        setRetakeLoading(true);
-                        setRetakeError("");
-                        try {
-                          const res = await generateQuestions({
-                            class_num: Number(jeeSelectedClass),
-                            chapters: state?.selectedChapters || [],
-                            questions_per_chapter:
-                              state?.questionsPerChapter || 5,
-                            subject: jeeSelectedSubject,
-                            difficulty_level: "Medium",
-                            ...(state?.selectedSubtopics?.length > 0 && {
-                              sub_topics: state.selectedSubtopics,
-                            }),
-                          });
-                          navigate("/quiz-question", {
-                            state: {
-                              quizData: res.data,
-                              classNum: Number(jeeSelectedClass),
-                              selectedChapters: state?.selectedChapters || [],
-                              questionsPerChapter:
-                                state?.questionsPerChapter || 5,
-                              subject: jeeSelectedSubject,
-                              selectedSubtopics: state?.selectedSubtopics || [],
-                              isJeeFoundation: true,
-                              jeeDifficulty: "Medium",
-                              jeeSelectedSubject,
-                              jeeSelectedClass,
-                            },
-                          });
-                        } catch (err) {
-                          setRetakeError(
-                            err.response?.data?.detail ||
-                              "Failed to regenerate questions.",
-                          );
-                        } finally {
-                          setRetakeLoading(false);
-                        }
-                      }}
-                      disabled={retakeLoading}
-                    >
-                      {retakeLoading
-                        ? "Preparing…"
-                        : "🔁 Retake Level 2 — Medium"}
-                    </button>
-                  )}
+                  <button
+                    className="qr-ss-btn secondary"
+                    onClick={() => handleJeeRetake("Medium")}
+                    disabled={retakeLoading}
+                  >
+                    {retakeLoading
+                      ? "Preparing…"
+                      : "🔁 Retake Level 2 — Medium"}
+                  </button>
                   <button
                     className="qr-ss-btn primary"
                     onClick={handleNextLevel}
                     disabled={retakeLoading}
                   >
                     {retakeLoading ? "Preparing…" : "⬆️ Move to Level 3 — Hard"}
+                  </button>
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={handleJeeSelfStudy}
+                    disabled={retakeLoading}
+                  >
+                    🚀 Go to Self Study
                   </button>
                 </div>
               </>
@@ -2188,97 +2269,21 @@ const QuizResult = () => {
               <>
                 <p className="qr-ss-message">
                   {scorePct >= 60
-                    ? "Excellent! You've conquered Level 3 — Hard. Time to go deep with Self Study."
-                    : "Below 60% on Hard. Retake to master these concepts or go to Self Study for in-depth practice."}
+                    ? "Excellent! You've conquered Level 3 — Hard. Go deep with Self Study."
+                    : "Below 60% on Hard. Retake to master the concepts or use Self Study for in-depth practice."}
                 </p>
                 <div className="qr-ss-actions">
-                  {scorePct < 60 && (
-                    <button
-                      className="qr-ss-btn secondary"
-                      onClick={async () => {
-                        setRetakeLoading(true);
-                        setRetakeError("");
-                        try {
-                          const res = await generateQuestions({
-                            class_num: Number(jeeSelectedClass),
-                            chapters: state?.selectedChapters || [],
-                            questions_per_chapter:
-                              state?.questionsPerChapter || 5,
-                            subject: jeeSelectedSubject,
-                            difficulty_level: "Hard",
-                            ...(state?.selectedSubtopics?.length > 0 && {
-                              sub_topics: state.selectedSubtopics,
-                            }),
-                          });
-                          navigate("/quiz-question", {
-                            state: {
-                              quizData: res.data,
-                              classNum: Number(jeeSelectedClass),
-                              selectedChapters: state?.selectedChapters || [],
-                              questionsPerChapter:
-                                state?.questionsPerChapter || 5,
-                              subject: jeeSelectedSubject,
-                              selectedSubtopics: state?.selectedSubtopics || [],
-                              isJeeFoundation: true,
-                              jeeDifficulty: "Hard",
-                              jeeSelectedSubject,
-                              jeeSelectedClass,
-                            },
-                          });
-                        } catch (err) {
-                          setRetakeError(
-                            err.response?.data?.detail ||
-                              "Failed to regenerate questions.",
-                          );
-                        } finally {
-                          setRetakeLoading(false);
-                        }
-                      }}
-                      disabled={retakeLoading}
-                    >
-                      {retakeLoading
-                        ? "Preparing…"
-                        : "🔁 Retake Level 3 — Hard"}
-                    </button>
-                  )}
-                  {/* Self Study — navigates to StudentDash with JEE prefill */}
+                  <button
+                    className="qr-ss-btn secondary"
+                    onClick={() => handleJeeRetake("Hard")}
+                    disabled={retakeLoading}
+                  >
+                    {retakeLoading ? "Preparing…" : "🔁 Retake Level 3 — Hard"}
+                  </button>
                   <button
                     className="qr-ss-btn primary"
-                    onClick={() => {
-                      navigate("/student-dash", {
-                        state: {
-                          prefill: {
-                            isJeeFoundation: true,
-                            source: "jee_testprep",
-                            fromQuizResult: true,
-                            // If we have exact Board IDs from jeeSelection, use them directly.
-                            // Otherwise fall back to the old fuzzy-match path.
-                            ...(jeeSelection
-                              ? {
-                                  // Direct path — exact Board IDs, no re-resolution needed
-                                  classCode: jeeSelection.classCode,
-                                  subjectCode: jeeSelection.subjectCode,
-                                  subjectName: jeeSelection.subjectName,
-                                  chapterCode: jeeSelection.chapterCode,
-                                  chapterName: jeeSelection.chapterName,
-                                  subtopics: jeeSelection.subtopics || [],
-                                  hasExactBoardIds: true,
-                                }
-                              : {
-                                  // Fallback fuzzy path (jeeSelection not available)
-                                  classCode: String(jeeSelectedClass),
-                                  subjectCode: jeeSelectedSubject,
-                                  subjectName: jeeSelectedSubject,
-                                  chapterName:
-                                    (state?.selectedChapters || [])[0] || "",
-                                  subtopics: state?.selectedSubtopics || [],
-                                  hasExactBoardIds: false,
-                                }),
-                          },
-                          autoFetch: true,
-                        },
-                      });
-                    }}
+                    onClick={handleJeeSelfStudy}
+                    disabled={retakeLoading}
                   >
                     🚀 Go to Self Study
                   </button>
@@ -2298,6 +2303,12 @@ const QuizResult = () => {
                     onClick={() => navigate("/quiz-mode")}
                   >
                     🔄 Take Another Test
+                  </button>
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={handleJeeSelfStudy}
+                  >
+                    🚀 Go to Self Study
                   </button>
                   <button className="qr-ss-btn secondary" onClick={downloadPDF}>
                     📥 Download Report
